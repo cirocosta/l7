@@ -1,0 +1,7 @@
+port: 80
+backends:
+  localhost:
+    servers:
+      - address: "http://nginx0"
+      - address: "http://nginx1"
+      - address: "http://nginx2"

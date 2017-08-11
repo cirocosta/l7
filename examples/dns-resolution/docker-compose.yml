@@ -1,0 +1,34 @@
+version: '3.2'
+services:
+  nginx0:
+    image: 'nginx:alpine'
+    networks:
+      testnet:
+        aliases:
+          - 'nginx'
+  nginx1:
+    image: 'nginx:alpine'
+    networks:
+      testnet:
+        aliases:
+          - 'nginx'
+  nginx2:
+    image: 'nginx:alpine'
+    networks:
+      testnet:
+        aliases:
+          - 'nginx'
+  l7:
+    image: 'cirocosta/l7'
+    volumes:
+      - './config.yml:/etc/config.yml'
+    networks:
+      testnet:
+    ports:
+      - '80:80'
+    command:
+      - '--port=80'
+      - 'localhost=http://nginx'
+
+networks:
+  testnet:
