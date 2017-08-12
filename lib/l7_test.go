@@ -1,6 +1,7 @@
 package lib
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/valyala/fasthttp"
 )
 
 func createServer(name string) *httptest.Server {
@@ -312,4 +314,31 @@ func Test_reconfigures(t *testing.T) {
 
 	assert.Contains(t, bodies, name1)
 	assert.Contains(t, bodies, name2)
+}
+
+func mustBase64EncodeUser(usr, pwd string) string {
+	return base64.StdEncoding.EncodeToString(
+		[]byte(fmt.Sprintf("%s:%s", usr, pwd)))
+}
+
+func TestAuthenticate(t *testing.T) {
+	users := map[string]string{
+		"admin": "admin",
+	}
+
+	lb, err := New(Config{
+		Users: users,
+	})
+	assert.NoError(t, err)
+
+	req := fasthttp.Request{}
+	req.Header.SetBytesKV(
+		[]byte("Authorization"),
+		[]byte("Basic: "+mustBase64EncodeUser("admin", "admin")))
+
+	ctx := &fasthttp.RequestCtx{
+		Request: req,
+	}
+
+	assert.True(t, lb.authenticate(ctx))
 }

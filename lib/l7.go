@@ -1,9 +1,9 @@
 package lib
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
-	"bytes"
 	"net"
 	"sync"
 
@@ -48,7 +48,9 @@ func (lb *L7) LoadUsers(users map[string]string) {
 	lb.users = make([][]byte, len(users))
 	for login, pwd := range users {
 		user := fmt.Sprintf("%s:%s", login, pwd)
-		lb.users[ndx] = []byte(base64.StdEncoding.EncodeToString([]byte(user)))
+		lb.users[ndx] = append(
+			[]byte("Basic: "),
+			base64.StdEncoding.EncodeToString([]byte(user))...)
 		ndx++
 	}
 }
@@ -105,6 +107,7 @@ var (
 	authorizationHeader = []byte("Authorization")
 	authenticateHeader  = []byte("WWW-Authenticate")
 	authenticateRealm   = []byte("Basic realm=\"basic\"")
+	connectionHeader    = []byte("Connection")
 )
 
 func (lb *L7) authenticate(ctx *fasthttp.RequestCtx) (ok bool) {
@@ -121,7 +124,7 @@ func (lb *L7) authenticate(ctx *fasthttp.RequestCtx) (ok bool) {
 	}
 
 	for _, usr := range lb.users {
-		if bytes.Equal(auth,usr) {
+		if bytes.Equal(auth, usr) {
 			ok = true
 			return
 		}
@@ -153,17 +156,19 @@ func (lb *L7) route(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	ctx.Request.Header.Del("Connection")
+	ctx.Request.Header.DelBytes(connectionHeader)
 	err := backend.Do(&ctx.Request, &ctx.Response)
 	if err != nil {
 		ctx.SetStatusCode(fasthttp.StatusBadGateway)
 	}
-	ctx.Response.Header.Del("Connection")
+	ctx.Response.Header.DelBytes(connectionHeader)
 }
 
 func (lb *L7) handler(ctx *fasthttp.RequestCtx) {
 	if len(lb.users) > 0 {
-		lb.authenticate(ctx)
+		if !lb.authenticate(ctx) {
+			return
+		}
 	}
 
 	lb.route(ctx)
