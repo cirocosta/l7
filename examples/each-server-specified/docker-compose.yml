@@ -6,11 +6,12 @@ services:
     image: 'nginx:alpine'
   nginx2:
     image: 'nginx:alpine'
-  flbd:
+
+  l7:
     image: 'cirocosta/l7'
     volumes:
-      - './config.yml:/etc/flbd/config.yml'
+      - './config.yml:/etc/l7/config.yml'
     ports:
       - '80:80'
     command:
-      - '--config=/etc/flbd/config.yml'
+      - '--config=/etc/l7/config.yml'
