@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -32,8 +33,10 @@ func New(cfg Config) (lb L7, err error) {
 	lb.port = cfg.Port
 
 	if cfg.Debug {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 		lb.logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
 	} else {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 		lb.logger = zerolog.New(os.Stderr)
 	}
 
@@ -153,6 +156,9 @@ func (lb *L7) authenticate(ctx *fasthttp.RequestCtx) (ok bool) {
 
 	auth = ctx.Request.Header.PeekBytes(authorizationHeader)
 	if len(auth) == 0 {
+		lb.logger.Info().
+			Msg("not authenticated")
+
 		ctx.Response.Header.SetBytesKV(
 			authenticateHeader, authenticateRealm)
 		ctx.SetStatusCode(401)
@@ -182,16 +188,28 @@ func (lb *L7) route(ctx *fasthttp.RequestCtx) {
 	}
 	ndx++
 
-	lb.logger.Info().Bytes("host", ctx.Host()[:ndx]).Msg("routing")
+	var logger = lb.logger.With().
+		Uint64("id", ctx.ConnID()).
+		Bytes("host", ctx.Host()[:ndx]).
+		Bytes("method", ctx.Request.Header.Method()).
+		Bytes("uri", ctx.Request.RequestURI()).
+		Logger()
+
+	logger.Debug().
+		Msg("routing")
 
 	lb.RLock()
 	backend, found := lb.backends[string(ctx.Host()[:ndx])]
 	lb.RUnlock()
 	if !found {
+		logger.Warn().
+			Msg("backend not found")
 		ctx.SetStatusCode(fasthttp.StatusNotFound)
 		return
 	}
 	if backend == nil {
+		logger.Warn().
+			Msg("no servers in backend")
 		ctx.SetStatusCode(fasthttp.StatusServiceUnavailable)
 		return
 	}
@@ -199,12 +217,16 @@ func (lb *L7) route(ctx *fasthttp.RequestCtx) {
 	ctx.Request.Header.DelBytes(connectionHeader)
 	err := backend.Do(&ctx.Request, &ctx.Response)
 	if err != nil {
+		logger.Warn().
+			Msg("bad gateway")
 		ctx.SetStatusCode(fasthttp.StatusBadGateway)
 	}
 	ctx.Response.Header.DelBytes(connectionHeader)
 }
 
 func (lb *L7) handler(ctx *fasthttp.RequestCtx) {
+	var t = time.Now()
+
 	if len(lb.users) > 0 {
 		if !lb.authenticate(ctx) {
 			lb.logger.Info().Msg("not authenticated")
@@ -213,6 +235,10 @@ func (lb *L7) handler(ctx *fasthttp.RequestCtx) {
 	}
 
 	lb.route(ctx)
+	lb.logger.Debug().
+		Uint64("id", ctx.ConnID()).
+		Int64("μ", int64(time.Since(t).Nanoseconds()/1000)).
+		Msg("finished")
 }
 
 func (lb *L7) Listen() (err error) {
