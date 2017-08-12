@@ -20,6 +20,7 @@ type Config struct {
 	Port     int                `yaml:"port"`
 	Backends map[string]Backend `yaml:"backends"`
 	Users    map[string]string  `yaml:"users"`
+	Debug    bool               `yaml:"debug"`
 }
 
 func NewConfigFromYamlFile(file string) (cfg Config, err error) {

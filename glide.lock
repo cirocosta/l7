@@ -1,5 +1,5 @@
-hash: bb2b835fa8d2c0ffd8fac03fc8dbab747486fc70bae3a7b769867f6c9fc592b8
-updated: 2017-08-05T14:38:29.242596788-03:00
+hash: 926390c1cfa3c79a472458134f599c882b415f7673012eb6f1971d74e69dac0c
+updated: 2017-08-12T12:27:47.640580135-03:00
 imports:
 - name: github.com/alexflint/go-arg
   version: cef6506c97e5731da728c374ff3523e481026423
@@ -15,6 +15,8 @@ imports:
   version: ae7887de9fa5d2db4eaa8174a7eff2c1ac00f2da
 - name: github.com/pkg/errors
   version: 645ef00459ed84a119197bfb8d8205042c6df63d
+- name: github.com/rs/zerolog
+  version: 2ed2f2c974489526d10329dae76d0f175684109a
 - name: github.com/stretchr/testify
   version: 69483b4bd14f5845b5a1e55bca19e954e827f1d0
   subpackages:

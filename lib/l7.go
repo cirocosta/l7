@@ -5,9 +5,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/valyala/fasthttp"
 )
 
@@ -18,6 +20,7 @@ var (
 type L7 struct {
 	sync.RWMutex
 
+	logger         zerolog.Logger
 	publicBackends map[string]Backend
 	users          [][]byte
 	port           int
@@ -27,6 +30,12 @@ type L7 struct {
 
 func New(cfg Config) (lb L7, err error) {
 	lb.port = cfg.Port
+
+	if cfg.Debug {
+		lb.logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
+	} else {
+		lb.logger = zerolog.New(os.Stderr)
+	}
 
 	if len(cfg.Users) > 0 {
 		lb.LoadUsers(cfg.Users)
@@ -45,6 +54,10 @@ func New(cfg Config) (lb L7, err error) {
 func (lb *L7) LoadUsers(users map[string]string) {
 	var ndx int = 0
 
+	lb.logger.Debug().
+		Int("users", len(users)).
+		Msg("loading users")
+
 	lb.users = make([][]byte, len(users))
 	for login, pwd := range users {
 		user := fmt.Sprintf("%s:%s", login, pwd)
@@ -52,23 +65,38 @@ func (lb *L7) LoadUsers(users map[string]string) {
 			[]byte("Basic: "),
 			base64.StdEncoding.EncodeToString([]byte(user))...)
 		ndx++
+
+		lb.logger.Debug().
+			Str("user", "login").
+			Msg("user loaded")
 	}
 }
 
 func (lb *L7) LoadBackends(backends map[string]Backend) (err error) {
 	var (
+		lbc  *fasthttp.LBClient
+		be   Backend
+		url  string
+		name string
+
 		internalBackends = make(map[string]*fasthttp.LBClient)
-		lbc              *fasthttp.LBClient
-		be               Backend
-		url              string
-		name             string
 	)
+
+	lb.logger.Debug().
+		Int("total", len(backends)).
+		Msg("loading backends")
 
 	for name, be = range backends {
 		if len(be.Servers) == 0 {
+			lb.logger.Debug().Str("backend", name).Msg("no servers")
 			internalBackends[name] = nil
 			continue
 		}
+
+		lb.logger.Debug().
+			Str("backend", name).
+			Int("total", len(be.Servers)).
+			Msg("loading servers")
 
 		lbc = &fasthttp.LBClient{}
 		for _, server := range be.Servers {
@@ -80,11 +108,19 @@ func (lb *L7) LoadBackends(backends map[string]Backend) (err error) {
 				return
 			}
 
+			lb.logger.Debug().
+				Str("backend", name).
+				Str("server", url).
+				Msg("server loaded")
+
 			lbc.Clients = append(lbc.Clients, &fasthttp.HostClient{
 				Addr: url,
 			})
 		}
 
+		lb.logger.Debug().
+			Str("backend", name).
+			Msg("backend loaded")
 		internalBackends[name] = lbc
 	}
 
@@ -140,12 +176,16 @@ func (lb *L7) route(ctx *fasthttp.RequestCtx) {
 
 	for ndx, b = range ctx.Host() {
 		if b == ':' {
+			ndx--
 			break
 		}
 	}
+	ndx++
+
+	lb.logger.Info().Bytes("host", ctx.Host()[:ndx]).Msg("routing")
 
 	lb.RLock()
-	backend, found := lb.backends[string(ctx.Host()[:ndx+1])]
+	backend, found := lb.backends[string(ctx.Host()[:ndx])]
 	lb.RUnlock()
 	if !found {
 		ctx.SetStatusCode(fasthttp.StatusNotFound)
@@ -167,6 +207,7 @@ func (lb *L7) route(ctx *fasthttp.RequestCtx) {
 func (lb *L7) handler(ctx *fasthttp.RequestCtx) {
 	if len(lb.users) > 0 {
 		if !lb.authenticate(ctx) {
+			lb.logger.Info().Msg("not authenticated")
 			return
 		}
 	}

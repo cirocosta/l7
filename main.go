@@ -9,6 +9,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/alexflint/go-arg"
+	"github.com/pkg/errors"
 
 	. "github.com/cirocosta/l7/lib"
 )
@@ -17,6 +18,7 @@ type config struct {
 	Port    int      `arg:"-p,help:port to listen to"`
 	Config  string   `arg:"-c,help:configuration file to use"`
 	User    []string `arg:--user,help:list of allowed users to login`
+	Debug   bool     `arg:"-d,help:enabled debug logs"`
 	Servers []string `arg:"positional"`
 }
 
@@ -70,7 +72,7 @@ func handleSignals(lb *L7, args *config) {
 			l7Config, err = NewConfigFromYamlFile(args.Config)
 			if err != nil {
 				fmt.Printf("ERROR: Couldn't parse configuration "+
-					"file supplied %s\n%+v\n", args.Config, err)
+					"file supplied %s\n%s\n", args.Config, errors.Cause(err))
 				fmt.Println("No action taken.")
 				continue
 			}
@@ -78,7 +80,7 @@ func handleSignals(lb *L7, args *config) {
 			err = lb.LoadBackends(l7Config.Backends)
 			if err != nil {
 				fmt.Printf("ERROR: Couldn't load configuration from "+
-					"file supplied %s\n%+v\n", args.Config, err)
+					"file supplied %s\n%s\n", args.Config, errors.Cause(err))
 				fmt.Println("No action taken.")
 				continue
 			}
@@ -103,18 +105,22 @@ func main() {
 		l7Config, err = NewConfigFromYamlFile(args.Config)
 		if err != nil {
 			fmt.Printf("ERROR: Couldn't parse configuration "+
-				"file supplied %s\n%+v\n", args.Config, err)
+				"file supplied %s\n%s\n", args.Config, errors.Cause(err))
 			os.Exit(1)
 		}
 	} else {
 		backends, err := EqualSeparatedToBackends(args.Servers)
 		if err != nil {
 			fmt.Printf("ERROR: Couldn't create server "+
-				"configuration from arguments.\n%+v\n", err)
+				"configuration from arguments.\n%s\n", errors.Cause(err))
 			fmt.Printf("See usage help by issuing 'l7 --help'.\n")
 			os.Exit(1)
 		}
-		l7Config = Config{Port: args.Port, Backends: backends}
+		l7Config = Config{
+			Port:     args.Port,
+			Backends: backends,
+			Debug:    args.Debug,
+		}
 	}
 
 	if l7Config.Users == nil {
@@ -136,7 +142,7 @@ func main() {
 	lb, err := New(l7Config)
 	if err != nil {
 		fmt.Printf("ERROR: Couldn't initialize flb with provided "+
-			"config %+v\n %+v\n", l7Config, err)
+			"config %+v\n %s\n", l7Config, errors.Cause(err))
 		os.Exit(1)
 	}
 
@@ -146,8 +152,8 @@ func main() {
 
 	err = lb.Listen()
 	if err != nil {
-		fmt.Printf("ERROR: Couldn't make load-balancer listen %+v\n %+v\n",
-			l7Config, err)
+		fmt.Printf("ERROR: Couldn't make load-balancer listen %+v\n %s\n",
+			l7Config, errors.Cause(err))
 		os.Exit(1)
 	}
 }
