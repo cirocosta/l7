@@ -1,3 +1,5 @@
+VERSION := $(shell cat ./VERSION)
+
 install:
 	go install -v
 
@@ -12,4 +14,9 @@ fmt:
 	cd ./lib && go fmt
 
 
-.PHONY: install test image fmt
+release:
+	git tag -a $(VERSION) -m "Release" || true
+	git push origin $(VERSION)
+	goreleaser --rm-dist
+
+.PHONY: install test image fmt release
