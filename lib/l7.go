@@ -186,7 +186,11 @@ func (lb *L7) Listen() (err error) {
 	lb.port = ln.Addr().(*net.TCPAddr).Port
 	lb.listener = ln
 
-	err = fasthttp.Serve(lb.listener, lb.handler)
+	err = (&fasthttp.Server{
+		Name: "cirocosta/l7",
+		DisableHeaderNamesNormalizing: true,
+		Handler: lb.handler,
+	}).Serve(ln)
 	if err != nil {
 		err = errors.Wrapf(err,
 			"couldn't serve http handler")

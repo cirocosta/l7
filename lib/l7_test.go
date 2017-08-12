@@ -322,23 +322,89 @@ func mustBase64EncodeUser(usr, pwd string) string {
 }
 
 func TestAuthenticate(t *testing.T) {
-	users := map[string]string{
-		"admin": "admin",
+	var testCases = []struct {
+		description string
+		users       map[string]string
+		headers     map[string]string
+		ok          bool
+	}{
+		{
+			description: "authenticates if no correct auth header",
+			users:       map[string]string{"admin": "admin"},
+			headers: map[string]string{
+				"Authorization": "Basic: " + mustBase64EncodeUser("admin", "admin"),
+			},
+			ok: true,
+		},
+		{
+			description: "doesnt authenticate even if no users set",
+			users:       map[string]string{},
+			headers:     map[string]string{},
+			ok:          false,
+		},
+		{
+			description: "doesnt authenticate if no use of auth header",
+			users:       map[string]string{"admin": "admin"},
+			headers:     map[string]string{},
+			ok:          false,
+		},
+		{
+			description: "doesnt authenticate if invalid auth",
+			users:       map[string]string{"admin": "admin"},
+			headers: map[string]string{
+				"Authorization": "Bearer: token",
+			},
+			ok: false,
+		},
+		{
+			description: "doesnt authenticate if auth present but user not in set",
+			users:       map[string]string{"admin": "admin"},
+			headers: map[string]string{
+				"Authorization": "Basic: " + mustBase64EncodeUser("myuser", "mypass"),
+			},
+			ok: false,
+		},
+		{
+			description: "doesnt authenticate if basic not camel cased",
+			users:       map[string]string{"admin": "admin"},
+			headers: map[string]string{
+				"Authorization": "baSIc: " + mustBase64EncodeUser("admin", "admin"),
+			},
+			ok: false,
+		},
+		{
+			description: "authenticates if auth header not camel cased",
+			users:       map[string]string{"admin": "admin"},
+			headers: map[string]string{
+				"auTHORization": "Basic: " + mustBase64EncodeUser("admin", "admin"),
+			},
+			ok: true,
+		},
 	}
 
-	lb, err := New(Config{
-		Users: users,
-	})
-	assert.NoError(t, err)
+	var (
+		lb  L7
+		req fasthttp.Request
+		err error
+	)
 
-	req := fasthttp.Request{}
-	req.Header.SetBytesKV(
-		[]byte("Authorization"),
-		[]byte("Basic: "+mustBase64EncodeUser("admin", "admin")))
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			lb, err = New(Config{
+				Users: tc.users,
+			})
+			assert.NoError(t, err)
 
-	ctx := &fasthttp.RequestCtx{
-		Request: req,
+			req = fasthttp.Request{}
+			for k, v := range tc.headers {
+				req.Header.SetBytesKV(
+					[]byte(k),
+					[]byte(v))
+			}
+
+			assert.Equal(t, tc.ok, lb.authenticate(&fasthttp.RequestCtx{
+				Request: req,
+			}))
+		})
 	}
-
-	assert.True(t, lb.authenticate(ctx))
 }
