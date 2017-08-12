@@ -33,7 +33,6 @@ func targetHost(host string, port int) (resp *http.Response, err error) {
 	return
 }
 
-
 func TestNew_doesntFailIfNoPortSpecified(t *testing.T) {
 	_, err := New(Config{})
 	assert.NoError(t, err)
@@ -333,7 +332,7 @@ func TestAuthenticate(t *testing.T) {
 			description: "authenticates if no correct auth header",
 			users:       map[string]string{"admin": "admin"},
 			headers: map[string]string{
-				"Authorization": "Basic: " + mustBase64EncodeUser("admin", "admin"),
+				"Authorization": "Basic " + mustBase64EncodeUser("admin", "admin"),
 			},
 			ok: true,
 		},
@@ -361,7 +360,7 @@ func TestAuthenticate(t *testing.T) {
 			description: "doesnt authenticate if auth present but user not in set",
 			users:       map[string]string{"admin": "admin"},
 			headers: map[string]string{
-				"Authorization": "Basic: " + mustBase64EncodeUser("myuser", "mypass"),
+				"Authorization": "Basic " + mustBase64EncodeUser("myuser", "mypass"),
 			},
 			ok: false,
 		},
@@ -377,7 +376,7 @@ func TestAuthenticate(t *testing.T) {
 			description: "authenticates if auth header not camel cased",
 			users:       map[string]string{"admin": "admin"},
 			headers: map[string]string{
-				"auTHORization": "Basic: " + mustBase64EncodeUser("admin", "admin"),
+				"auTHORization": "Basic " + mustBase64EncodeUser("admin", "admin"),
 			},
 			ok: true,
 		},
@@ -422,7 +421,7 @@ func Test_respondsWith401WWAuthenticateIfNotAuthenticated(t *testing.T) {
 
 	lb, err := New(Config{
 		Users: map[string]string{
-			"admin":"admin",
+			"admin": "admin",
 		},
 		Backends: map[string]Backend{
 			"something.com": Backend{
@@ -459,7 +458,7 @@ func Test_respondsWithAccordinglyIfAuthenticated(t *testing.T) {
 
 	lb, err := New(Config{
 		Users: map[string]string{
-			"admin":"admin",
+			"admin": "admin",
 		},
 		Backends: map[string]Backend{
 			"something.com": Backend{
@@ -476,7 +475,6 @@ func Test_respondsWithAccordinglyIfAuthenticated(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-
 	var addr = fmt.Sprintf("http://localhost:%d", lb.port)
 	var client = &http.Client{}
 
@@ -485,7 +483,7 @@ func Test_respondsWithAccordinglyIfAuthenticated(t *testing.T) {
 		return
 	}
 
-	req.Header.Add("Authorization","Basic: " + mustBase64EncodeUser("admin", "admin"))
+	req.Header.Add("Authorization", "Basic "+mustBase64EncodeUser("admin", "admin"))
 	req.Host = "something.com"
 
 	resp, err := client.Do(req)

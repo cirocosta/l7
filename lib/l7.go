@@ -65,7 +65,7 @@ func (lb *L7) LoadUsers(users map[string]string) {
 	for login, pwd := range users {
 		user := fmt.Sprintf("%s:%s", login, pwd)
 		lb.users[ndx] = append(
-			[]byte("Basic: "),
+			[]byte("Basic "),
 			base64.StdEncoding.EncodeToString([]byte(user))...)
 		ndx++
 
@@ -157,7 +157,8 @@ func (lb *L7) authenticate(ctx *fasthttp.RequestCtx) (ok bool) {
 	auth = ctx.Request.Header.PeekBytes(authorizationHeader)
 	if len(auth) == 0 {
 		lb.logger.Info().
-			Msg("not authenticated")
+			Uint64("id", ctx.ConnID()).
+			Msg("auth header required but not present")
 
 		ctx.Response.Header.SetBytesKV(
 			authenticateHeader, authenticateRealm)
@@ -166,8 +167,11 @@ func (lb *L7) authenticate(ctx *fasthttp.RequestCtx) (ok bool) {
 	}
 
 	for _, usr := range lb.users {
+		lb.logger.Info().Bytes("usr", usr).Bytes("auth", auth).Msg("checking")
+
 		if bytes.Equal(auth, usr) {
 			lb.logger.Debug().
+				Uint64("id", ctx.ConnID()).
 				Msg("authentication succeeded")
 			ok = true
 			return
@@ -175,7 +179,8 @@ func (lb *L7) authenticate(ctx *fasthttp.RequestCtx) (ok bool) {
 	}
 
 	lb.logger.Info().
-		Msg("not authenticated")
+		Uint64("id", ctx.ConnID()).
+		Msg("no allowed user found")
 	return
 }
 
@@ -234,12 +239,16 @@ func (lb *L7) handler(ctx *fasthttp.RequestCtx) {
 
 	if len(lb.users) > 0 {
 		if !lb.authenticate(ctx) {
-			lb.logger.Info().Msg("not authenticated")
-			return
+			lb.logger.Info().
+				Uint64("id", ctx.ConnID()).
+				Msg("required authentication failed")
+			goto END
 		}
 	}
 
 	lb.route(ctx)
+
+END:
 	lb.logger.Debug().
 		Uint64("id", ctx.ConnID()).
 		Int64("μ", int64(time.Since(t).Nanoseconds()/1000)).
