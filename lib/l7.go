@@ -167,10 +167,15 @@ func (lb *L7) authenticate(ctx *fasthttp.RequestCtx) (ok bool) {
 
 	for _, usr := range lb.users {
 		if bytes.Equal(auth, usr) {
+			lb.logger.Debug().
+				Msg("authentication succeeded")
 			ok = true
 			return
 		}
 	}
+
+	lb.logger.Info().
+		Msg("not authenticated")
 	return
 }
 

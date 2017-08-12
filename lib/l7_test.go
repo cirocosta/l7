@@ -33,6 +33,7 @@ func targetHost(host string, port int) (resp *http.Response, err error) {
 	return
 }
 
+
 func TestNew_doesntFailIfNoPortSpecified(t *testing.T) {
 	_, err := New(Config{})
 	assert.NoError(t, err)
@@ -407,4 +408,93 @@ func TestAuthenticate(t *testing.T) {
 			}))
 		})
 	}
+}
+
+func Test_respondsWith401WWAuthenticateIfNotAuthenticated(t *testing.T) {
+	var server = createServer("myserver")
+	defer server.Close()
+
+	var servers = []Server{
+		{
+			Address: server.URL,
+		},
+	}
+
+	lb, err := New(Config{
+		Users: map[string]string{
+			"admin":"admin",
+		},
+		Backends: map[string]Backend{
+			"something.com": Backend{
+				Servers: servers,
+			},
+		},
+	})
+	assert.NoError(t, err)
+
+	defer lb.Stop()
+	go func() {
+		lb.Listen()
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	for i := 0; i < 10; i++ {
+		resp, err := targetHost("something.com", lb.port)
+		assert.NoError(t, err)
+		assert.Equal(t, 401, resp.StatusCode)
+		assert.NotEmpty(t, resp.Header.Get("WWW-Authenticate"))
+	}
+}
+
+func Test_respondsWithAccordinglyIfAuthenticated(t *testing.T) {
+	var server = createServer("myserver")
+	defer server.Close()
+
+	var servers = []Server{
+		{
+			Address: server.URL,
+		},
+	}
+
+	lb, err := New(Config{
+		Users: map[string]string{
+			"admin":"admin",
+		},
+		Backends: map[string]Backend{
+			"something.com": Backend{
+				Servers: servers,
+			},
+		},
+	})
+	assert.NoError(t, err)
+
+	defer lb.Stop()
+	go func() {
+		lb.Listen()
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+
+	var addr = fmt.Sprintf("http://localhost:%d", lb.port)
+	var client = &http.Client{}
+
+	req, err := http.NewRequest("GET", addr, nil)
+	if err != nil {
+		return
+	}
+
+	req.Header.Add("Authorization","Basic: " + mustBase64EncodeUser("admin", "admin"))
+	req.Host = "something.com"
+
+	resp, err := client.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Empty(t, resp.Header.Get("WWW-Authenticate"))
+
+	data, err := ioutil.ReadAll(resp.Body)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "myserver", string(data))
 }
