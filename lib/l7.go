@@ -1,7 +1,9 @@
 package lib
 
 import (
+	"encoding/base64"
 	"fmt"
+	"bytes"
 	"net"
 	"sync"
 
@@ -17,7 +19,7 @@ type L7 struct {
 	sync.RWMutex
 
 	publicBackends map[string]Backend
-	users          map[string]string
+	users          [][]byte
 	port           int
 	listener       net.Listener
 	backends       map[string]*fasthttp.LBClient
@@ -25,7 +27,10 @@ type L7 struct {
 
 func New(cfg Config) (lb L7, err error) {
 	lb.port = cfg.Port
-	lb.users = cfg.Users
+
+	if len(cfg.Users) > 0 {
+		lb.LoadUsers(cfg.Users)
+	}
 
 	err = lb.LoadBackends(cfg.Backends)
 	if err != nil {
@@ -35,6 +40,17 @@ func New(cfg Config) (lb L7, err error) {
 	}
 
 	return
+}
+
+func (lb *L7) LoadUsers(users map[string]string) {
+	var ndx int = 0
+
+	lb.users = make([][]byte, len(users))
+	for login, pwd := range users {
+		user := fmt.Sprintf("%s:%s", login, pwd)
+		lb.users[ndx] = []byte(base64.StdEncoding.EncodeToString([]byte(user)))
+		ndx++
+	}
 }
 
 func (lb *L7) LoadBackends(backends map[string]Backend) (err error) {
@@ -70,9 +86,10 @@ func (lb *L7) LoadBackends(backends map[string]Backend) (err error) {
 		internalBackends[name] = lbc
 	}
 
+	lb.publicBackends = backends
+
 	lb.Lock()
 	defer lb.Unlock()
-	lb.publicBackends = backends
 	lb.backends = internalBackends
 	return
 }
@@ -84,7 +101,35 @@ func (lb *L7) GetBackends() map[string]Backend {
 	return lb.publicBackends
 }
 
-func (lb *L7) handler(ctx *fasthttp.RequestCtx) {
+var (
+	authorizationHeader = []byte("Authorization")
+	authenticateHeader  = []byte("WWW-Authenticate")
+	authenticateRealm   = []byte("Basic realm=\"basic\"")
+)
+
+func (lb *L7) authenticate(ctx *fasthttp.RequestCtx) (ok bool) {
+	var (
+		auth []byte
+	)
+
+	auth = ctx.Request.Header.PeekBytes(authorizationHeader)
+	if len(auth) == 0 {
+		ctx.Response.Header.SetBytesKV(
+			authenticateHeader, authenticateRealm)
+		ctx.SetStatusCode(401)
+		return
+	}
+
+	for _, usr := range lb.users {
+		if bytes.Equal(auth,usr) {
+			ok = true
+			return
+		}
+	}
+	return
+}
+
+func (lb *L7) route(ctx *fasthttp.RequestCtx) {
 	var (
 		ndx int
 		b   byte
@@ -114,7 +159,14 @@ func (lb *L7) handler(ctx *fasthttp.RequestCtx) {
 		ctx.SetStatusCode(fasthttp.StatusBadGateway)
 	}
 	ctx.Response.Header.Del("Connection")
+}
 
+func (lb *L7) handler(ctx *fasthttp.RequestCtx) {
+	if len(lb.users) > 0 {
+		lb.authenticate(ctx)
+	}
+
+	lb.route(ctx)
 }
 
 func (lb *L7) Listen() (err error) {

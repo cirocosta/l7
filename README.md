@@ -18,7 +18,7 @@ In order to facilitate testing it's possible to specify all the arguments from t
 
 
 ```sh
-Usage: l7 [--port PORT] [--config CONFIG] [SERVERS [SERVERS ...]]
+Usage: l7 [--port PORT] [--config CONFIG] [--user USER] [SERVERS [SERVERS ...]]
 
 Positional arguments:
   SERVERS
@@ -27,12 +27,16 @@ Options:
   --port PORT, -p PORT   port to listen to [default: 80]
   --config CONFIG, -c CONFIG
                          configuration file to use
+  --user USER
   --help, -h             display this help and exit
 
 
 Example:
-  sudo l7 --port 80 \
-         mydomain.com=127.0.0.1:8081 \
+  sudo l7 \
+        --user admin:admin \		# enforces basic auth on all requests
+        --user someone:mypasswd \		
+        --port 80 \			# binds to port 80
+         mydomain.com=127.0.0.1:8081 \	# list of server configurations
          mydomain.com=127.0.0.1:8082 \
          mydomain.com=127.0.0.1:8083 \
          example.io=127.0.0.1:1337
@@ -41,7 +45,7 @@ Example:
 In the example above we make `l7` listen on port `80` and place two rules for load-balancing:
 - requests to `mydomain.com` should be split across 3 servers listening on 127.0.0.1
 - requests to `example.io` should go to `127.0.0.1:1337`
-
+- every request to either `mydomain.com` or `example.io` must be authenticated
 
 
 ##### Configuration file
@@ -57,7 +61,10 @@ The configuration is composed of few definitions. Changing the following example
 
 ```yaml
 # config.yml
-port: 80
+port: 80	
+users:			# optional
+  myuser: 'passwd'
+  admin: 'admin'
 backends:
   example.com:
     servers:
@@ -71,6 +78,7 @@ backends:
 Above we're specifying that:
 - we want `l7` listening on port 80 (this will require using `sudo` - a privileged user - to continue)
 - those requests with `host` set to `example.com` should be load-balanced across 3 distinct servers
+- all requests must be authenticated with either `myuser:passwd` or `admin:admin`. Note.: this configuration is not required.
 
 
 Once initialized, the configuration can be reloaded without the need of restarting the whole process. Send a `SIGHUP` to the pid of the load-balancer to reload it on the fly. 

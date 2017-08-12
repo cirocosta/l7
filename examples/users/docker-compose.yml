@@ -1,0 +1,13 @@
+version: '3.2'
+services:
+  nginx:
+    image: 'nginx:alpine'
+
+  l7:
+    image: 'cirocosta/l7'
+    ports:
+      - '80:80'
+    command:
+      - '--port=80'
+      - '--user=admin:admin'
+      - 'localhost=http://nginx'
