@@ -3,7 +3,6 @@ package lib
 import (
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -14,17 +13,19 @@ var (
 	ErrInvalidAddress = errors.Errorf("Supplied address is invalid")
 )
 
-type Flb struct {
+type L7 struct {
 	sync.RWMutex
 
 	publicBackends map[string]Backend
+	users          map[string]string
 	port           int
 	listener       net.Listener
 	backends       map[string]*fasthttp.LBClient
 }
 
-func New(cfg Config) (lb Flb, err error) {
+func New(cfg Config) (lb L7, err error) {
 	lb.port = cfg.Port
+	lb.users = cfg.Users
 
 	err = lb.LoadBackends(cfg.Backends)
 	if err != nil {
@@ -36,12 +37,16 @@ func New(cfg Config) (lb Flb, err error) {
 	return
 }
 
-func (lb *Flb) LoadBackends(backends map[string]Backend) (err error) {
-	var internalBackends = make(map[string]*fasthttp.LBClient)
-	var lbc *fasthttp.LBClient
-	var url string
+func (lb *L7) LoadBackends(backends map[string]Backend) (err error) {
+	var (
+		internalBackends = make(map[string]*fasthttp.LBClient)
+		lbc              *fasthttp.LBClient
+		be               Backend
+		url              string
+		name             string
+	)
 
-	for name, be := range backends {
+	for name, be = range backends {
 		if len(be.Servers) == 0 {
 			internalBackends[name] = nil
 			continue
@@ -72,18 +77,27 @@ func (lb *Flb) LoadBackends(backends map[string]Backend) (err error) {
 	return
 }
 
-func (lb *Flb) GetBackends() map[string]Backend {
+func (lb *L7) GetBackends() map[string]Backend {
 	lb.RLock()
 	defer lb.RUnlock()
 
 	return lb.publicBackends
 }
 
-func (lb *Flb) handler(ctx *fasthttp.RequestCtx) {
-	var host = strings.Split(string(ctx.Host()), ":")[0]
+func (lb *L7) handler(ctx *fasthttp.RequestCtx) {
+	var (
+		ndx int
+		b   byte
+	)
+
+	for ndx, b = range ctx.Host() {
+		if b == ':' {
+			break
+		}
+	}
 
 	lb.RLock()
-	backend, found := lb.backends[host]
+	backend, found := lb.backends[string(ctx.Host()[:ndx+1])]
 	lb.RUnlock()
 	if !found {
 		ctx.SetStatusCode(fasthttp.StatusNotFound)
@@ -94,19 +108,16 @@ func (lb *Flb) handler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	req := &ctx.Request
-	resp := &ctx.Response
-	req.Header.Del("Connection")
-
-	err := backend.Do(req, resp)
+	ctx.Request.Header.Del("Connection")
+	err := backend.Do(&ctx.Request, &ctx.Response)
 	if err != nil {
 		ctx.SetStatusCode(fasthttp.StatusBadGateway)
 	}
-	resp.Header.Del("Connection")
+	ctx.Response.Header.Del("Connection")
 
 }
 
-func (lb *Flb) Listen() (err error) {
+func (lb *L7) Listen() (err error) {
 	ln, err := net.Listen("tcp4", fmt.Sprintf(":%d", lb.port))
 	if err != nil {
 		err = errors.Wrapf(err,
@@ -129,7 +140,7 @@ func (lb *Flb) Listen() (err error) {
 }
 
 // TODO implement gracefull shutdown
-func (lb *Flb) Stop() {
+func (lb *L7) Stop() {
 	if lb.listener != nil {
 		lb.listener.Close()
 	}

@@ -1,8 +1,8 @@
-image:
-	docker build -t cirocosta/l7 .
-
 install:
 	go install -v
+
+image:
+	docker build -t cirocosta/l7 .
 
 test:
 	cd ./lib && go test -v

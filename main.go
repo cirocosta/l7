@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"text/tabwriter"
 
@@ -15,6 +16,7 @@ import (
 type config struct {
 	Port    int      `arg:"-p,help:port to listen to"`
 	Config  string   `arg:"-c,help:configuration file to use"`
+	User    []string `arg:--user,help:list of allowed users to login`
 	Servers []string `arg:"positional"`
 }
 
@@ -26,12 +28,16 @@ var (
 )
 
 func ShowBackendsConfig(backends map[string]Backend) {
-	w := new(tabwriter.Writer)
+	var (
+		w   = new(tabwriter.Writer)
+		ndx int
+		srv Server
+	)
+
 	w.Init(os.Stdout, 0, 8, 4, '\t', 0)
 	fmt.Fprintf(w, "BACKEND\tSERVER\n")
-
 	for domain, backend := range backends {
-		for ndx, srv := range backend.Servers {
+		for ndx, srv = range backend.Servers {
 			if ndx == 0 {
 				fmt.Fprintf(w, "%s\t%s\n", domain, srv.Address)
 			} else {
@@ -43,7 +49,7 @@ func ShowBackendsConfig(backends map[string]Backend) {
 	w.Flush()
 }
 
-func handleSignals(lb *Flb, args *config) {
+func handleSignals(lb *L7, args *config) {
 	for {
 		sigs := make(chan os.Signal, 1)
 		signal.Notify(sigs,
@@ -105,11 +111,26 @@ func main() {
 		if err != nil {
 			fmt.Printf("ERROR: Couldn't create server "+
 				"configuration from arguments.\n%+v\n", err)
-			fmt.Printf("See use help by issuing 'l7 --help'.\n")
+			fmt.Printf("See usage help by issuing 'l7 --help'.\n")
+			os.Exit(1)
+		}
+		l7Config = Config{Port: args.Port, Backends: backends}
+	}
+
+	if l7Config.Users == nil {
+		l7Config.Users = make(map[string]string)
+	}
+
+	for _, usr := range args.User {
+		pair := strings.Split(usr, ":")
+		if len(pair) != 2 {
+			fmt.Printf("ERROR: Malformed 'user' specification.\n")
+			fmt.Printf("A list of users must be '--user login:pswd --user login2:pswd2'\n")
+			fmt.Printf("See usage help by issuing 'l7 --help'.\n")
 			os.Exit(1)
 		}
 
-		l7Config = Config{Port: args.Port, Backends: backends}
+		l7Config.Users[pair[0]] = pair[1]
 	}
 
 	lb, err := New(l7Config)

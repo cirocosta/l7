@@ -301,7 +301,7 @@ func Test_reconfigures(t *testing.T) {
 		}
 	}()
 
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 1000; i++ {
 		resp, err := targetHost("something.com", lb.port)
 		assert.NoError(t, err)
 		assert.Equal(t, 200, resp.StatusCode)
