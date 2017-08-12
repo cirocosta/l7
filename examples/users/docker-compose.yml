@@ -8,6 +8,7 @@ services:
     ports:
       - '80:80'
     command:
+      - '-d'
       - '--port=80'
       - '--user=admin:admin'
       - 'localhost=http://nginx'

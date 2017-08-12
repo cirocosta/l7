@@ -70,7 +70,7 @@ func (lb *L7) LoadUsers(users map[string]string) {
 		ndx++
 
 		lb.logger.Debug().
-			Str("user", "login").
+			Str("user", login).
 			Msg("user loaded")
 	}
 }

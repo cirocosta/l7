@@ -116,27 +116,25 @@ func main() {
 			fmt.Printf("See usage help by issuing 'l7 --help'.\n")
 			os.Exit(1)
 		}
+
 		l7Config = Config{
 			Port:     args.Port,
 			Backends: backends,
 			Debug:    args.Debug,
-		}
-	}
-
-	if l7Config.Users == nil {
-		l7Config.Users = make(map[string]string)
-	}
-
-	for _, usr := range args.User {
-		pair := strings.Split(usr, ":")
-		if len(pair) != 2 {
-			fmt.Printf("ERROR: Malformed 'user' specification.\n")
-			fmt.Printf("A list of users must be '--user login:pswd --user login2:pswd2'\n")
-			fmt.Printf("See usage help by issuing 'l7 --help'.\n")
-			os.Exit(1)
+			Users:    make(map[string]string),
 		}
 
-		l7Config.Users[pair[0]] = pair[1]
+		for _, usr := range args.User {
+			pair := strings.Split(usr, ":")
+			if len(pair) != 2 {
+				fmt.Printf("ERROR: Malformed 'user' specification.\n")
+				fmt.Printf("A list of users must be '--user login:pswd --user login2:pswd2'\n")
+				fmt.Printf("See usage help by issuing 'l7 --help'.\n")
+				os.Exit(1)
+			}
+
+			l7Config.Users[pair[0]] = pair[1]
+		}
 	}
 
 	lb, err := New(l7Config)
