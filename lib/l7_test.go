@@ -373,6 +373,14 @@ func TestAuthenticate(t *testing.T) {
 			ok: false,
 		},
 		{
+			description: "doesnt authenticate if wrong password",
+			users:       map[string]string{"admin": "admin"},
+			headers: map[string]string{
+				"Authorization": "Basic " + mustBase64EncodeUser("admin", "hue"),
+			},
+			ok: false,
+		},
+		{
 			description: "authenticates if auth header not camel cased",
 			users:       map[string]string{"admin": "admin"},
 			headers: map[string]string{
@@ -495,4 +503,59 @@ func Test_respondsWithAccordinglyIfAuthenticated(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, "myserver", string(data))
+}
+
+func Test_respondsWithUnauthorizedIfTooManyFailedAttempts(t *testing.T) {
+	var server = createServer("myserver")
+	defer server.Close()
+
+	var servers = []Server{
+		{
+			Address: server.URL,
+		},
+	}
+
+	lb, err := New(Config{
+		Users: map[string]string{
+			"admin": "admin",
+		},
+		Backends: map[string]Backend{
+			"else.com": Backend{
+				Servers: servers,
+			},
+		},
+	})
+	assert.NoError(t, err)
+
+	defer lb.Stop()
+	go func() {
+		lb.Listen()
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	var (
+		addr   = fmt.Sprintf("http://localhost:%d", lb.port)
+		client = &http.Client{}
+		req    *http.Request
+		resp   *http.Response
+	)
+
+	req, err = http.NewRequest("GET", addr, nil)
+	if err != nil {
+		return
+	}
+
+	req.Header.Add("Authorization", "Basic "+mustBase64EncodeUser("admin", "wrong-password"))
+	req.Host = "else.com"
+
+	for i := 0; i < 10; i++ {
+		resp, err = client.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, 401, resp.StatusCode)
+	}
+
+	resp, err = client.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, 429, resp.StatusCode)
 }

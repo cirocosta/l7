@@ -11,3 +11,4 @@ import:
 - package: gopkg.in/yaml.v2
 - package: github.com/rs/zerolog
   version: v1.2.2
+- package: github.com/juju/ratelimit

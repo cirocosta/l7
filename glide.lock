@@ -1,10 +1,12 @@
-hash: 926390c1cfa3c79a472458134f599c882b415f7673012eb6f1971d74e69dac0c
-updated: 2017-08-12T12:27:47.640580135-03:00
+hash: bc8d1b8d1386a49231c9be9fde596288d266d0434faa65a4b17e38466a710390
+updated: 2017-09-09T21:05:35.277570516-03:00
 imports:
 - name: github.com/alexflint/go-arg
   version: cef6506c97e5731da728c374ff3523e481026423
 - name: github.com/alexflint/go-scalar
   version: 45e5d6cd8605faef82fda2bacc59e734a0b6f1f0
+- name: github.com/juju/ratelimit
+  version: 5b9ff866471762aa2ab2dced63c9fb6f53921342
 - name: github.com/klauspost/compress
   version: f3dce52e0576655d55fd69e74b63da96ad1108f3
   subpackages:
@@ -17,6 +19,8 @@ imports:
   version: 645ef00459ed84a119197bfb8d8205042c6df63d
 - name: github.com/rs/zerolog
   version: 2ed2f2c974489526d10329dae76d0f175684109a
+  subpackages:
+  - internal/json
 - name: github.com/stretchr/testify
   version: 69483b4bd14f5845b5a1e55bca19e954e827f1d0
   subpackages:
@@ -24,13 +28,13 @@ imports:
 - name: github.com/valyala/bytebufferpool
   version: e746df99fe4a3986f4d4f79e13c1e0117ce9c2f7
 - name: github.com/valyala/fasthttp
-  version: ae643c872d2c060154a4fb2162dc1c0ab1693ccd
+  version: b43f17d9a9aa1e39f2614f49c8fa4fe8f406c83d
   repo: https://github.com/valyala/fasthttp
   subpackages:
   - fasthttputil
   - stackless
 - name: gopkg.in/yaml.v2
-  version: 25c4ec802a7d637f88d584ab26798e94ad14c13b
+  version: eb3733d160e74a9c7e442f435eb3bea458e1d19f
 testImports:
 - name: github.com/davecgh/go-spew
   version: 6d212800a42e8ab5c146b8ace3490ee17e5225f9

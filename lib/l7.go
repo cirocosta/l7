@@ -135,6 +135,9 @@ func (lb *L7) LoadBackends(backends map[string]Backend) (err error) {
 	return
 }
 
+// GetBackends retrieves the mapping of all the backends
+// that have been loaded into l7 from the last succesfull
+// load.
 func (lb *L7) GetBackends() map[string]Backend {
 	lb.RLock()
 	defer lb.RUnlock()
@@ -160,14 +163,14 @@ func (lb *L7) authenticate(ctx *fasthttp.RequestCtx) (ok bool) {
 			Uint64("id", ctx.ConnID()).
 			Msg("auth header required but not present")
 
-		ctx.Response.Header.SetBytesKV(
-			authenticateHeader, authenticateRealm)
-		ctx.SetStatusCode(401)
-		return
+		goto ABORT
 	}
 
 	for _, usr := range lb.users {
-		lb.logger.Info().Bytes("usr", usr).Bytes("auth", auth).Msg("checking")
+		lb.logger.Info().
+			Bytes("usr", usr).
+			Bytes("auth", auth).
+			Msg("checking")
 
 		if bytes.Equal(auth, usr) {
 			lb.logger.Debug().
@@ -181,6 +184,11 @@ func (lb *L7) authenticate(ctx *fasthttp.RequestCtx) (ok bool) {
 	lb.logger.Info().
 		Uint64("id", ctx.ConnID()).
 		Msg("no allowed user found")
+
+ABORT:
+	ctx.Response.Header.SetBytesKV(
+		authenticateHeader, authenticateRealm)
+	ctx.SetStatusCode(401)
 	return
 }
 
@@ -249,12 +257,15 @@ func (lb *L7) handler(ctx *fasthttp.RequestCtx) {
 	lb.route(ctx)
 
 END:
-	lb.logger.Debug().
+	lb.logger.Info().
 		Uint64("id", ctx.ConnID()).
+		Int("status", ctx.Response.StatusCode()).
 		Int64("μ", int64(time.Since(t).Nanoseconds()/1000)).
 		Msg("finished")
 }
 
+// Listen is a blocking method that puts the L7 load-balancer
+// into 'listen'ing state awaiting for incoming connections.
 func (lb *L7) Listen() (err error) {
 	ln, err := net.Listen("tcp4", fmt.Sprintf(":%d", lb.port))
 	if err != nil {
