@@ -15,6 +15,3 @@ COPY --from=builder /usr/bin/l7 /usr/local/bin/l7
 
 ENTRYPOINT [ "l7" ]
 
-
-
-
